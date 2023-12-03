@@ -7,32 +7,34 @@ var input = (""
     + "Game 5: 6 red, 1 blue, 3 green; 2 blue, 1 red, 2 green\n"
     ).Split('\n').AsEnumerable();
 
+Directory.SetCurrentDirectory(@"c:\tools\advent2023\02");
 input = File.ReadLines("input.txt");
 
 int sum = 0;
 foreach (string line in input)
 {
-    if (line.Split(':') is not [string game_n, string sets]) continue;
-
-    int game = int.Parse(game_n.Split(' ')[1]);
-    int red = 0;
-    int green = 0;
-    int blue = 0;
-
-    foreach (var set in sets.Split(';'))
+    if (line.Split(':') is [string game_n, string sets])
     {
-        foreach (var cube in set.Split(','))
+        int game = int.Parse(game_n.Split(' ')[1]);
+        int red = 0;
+        int green = 0;
+        int blue = 0;
+
+        foreach (var set in sets.Split(';'))
         {
-            if (cube.Split(' ', StringSplitOptions.RemoveEmptyEntries) is not [string snumber, string color]) throw null;
-            int number = int.Parse(snumber);
-            if (color == "red")
-                red = Math.Max(red, number);
-            if (color == "green")
-                green = Math.Max(green, number);
-            if (color == "blue")
-                blue = Math.Max(blue, number);
+            foreach (var cube in set.Split(','))
+            {
+                if (cube.Split(' ', StringSplitOptions.RemoveEmptyEntries) is [string number, string color])
+                {
+                    ref int acc =
+                        ref color == "red" ? ref red :
+                        ref color == "green" ? ref green :
+                        ref blue;
+                    acc = Math.Max(acc, int.Parse(number));
+                }
+            }
         }
+        sum += red * green * blue;
     }
-    sum += red * green * blue;
 }
 Console.WriteLine(sum);

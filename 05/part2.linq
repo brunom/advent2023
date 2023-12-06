@@ -1,44 +1,62 @@
-<Query Kind="Statements" />
+<Query Kind="Program" />
 
-Directory.SetCurrentDirectory(@"C:\tools\advent2023\05");
-
-var lines = File.ReadLines("example.txt");
-var e = lines.GetEnumerator();
-e.MoveNext();
-var narr = e.Current.Split();
-List<long> numbers = new List<long>();
-for (int i = 1; i + 1 < narr.Length; i += 2)
+struct Range
 {
-	numbers.AddRange(Enumerable.Range(int.Parse(narr[i]), int.Parse(narr[i+1])).Select(x => (long)x));
-}
-e.MoveNext(); // \n
+	public long Start;
+	public long End;
+};
 
-while (e.MoveNext()) // ".* map:"
+void Main()
+{
+	Directory.SetCurrentDirectory(@"C:\tools\advent2023\05");
+
+	var lines = File.ReadLines("input.txt");
+	var e = lines.GetEnumerator();
+	e.MoveNext();
+	var narr = e.Current.Split();
+	var numbers = new List<Range>();
+	for (int i = 1; i + 1 < narr.Length; i += 2)
 	{
-		var mapped = new List<long>();
+		long start = long.Parse(narr[i]);
+		long length = long.Parse(narr[i + 1]);
+		numbers.Add(new Range { Start = start, End = start + length, });
+	}
+	e.MoveNext(); // \n
+
+	while (e.MoveNext()) // ".* map:"
+	{
+		var mapped = new List<Range>();
 		while (true)
 		{
 			e.MoveNext();
 			if (string.IsNullOrWhiteSpace(e.Current))
 				break;
 			var arr = e.Current.Split();
-			var dest = long.Parse(arr[0]);
-			var src = long.Parse(arr[1]);
+			var dest_start = long.Parse(arr[0]);
+			var src_start = long.Parse(arr[1]);
 			var length = long.Parse(arr[2]);
-			var same = new List<long>();
+			var src_end = src_start + length;
+			var bump = dest_start - src_start;
+
+			var same = new List<Range>();
 			foreach (var n in numbers)
 			{
-				if (src <= n && n < src + length)
+				if (n.Start < src_start)
 				{
-					mapped.Add(dest + n - src);
+					same.Add(new Range { Start = n.Start, End = Math.Min(n.End, src_start), });
 				}
-				else
+				if (src_start < n.End && n.Start < src_end)
 				{
-					same.Add(n);
+					mapped.Add(new Range { Start = Math.Max(n.Start, src_start) + bump, End = Math.Min(n.End, src_end) + bump, });
+				}
+				if (src_end < n.End)
+				{
+					same.Add(new Range { Start = Math.Max(n.Start, src_end), End = n.End, });
 				}
 			}
 			numbers = same;
 		}
 		numbers.AddRange(mapped);
 	}
-numbers.Min().Dump();
+	numbers.Select(x => x.Start).Min().Dump();
+}

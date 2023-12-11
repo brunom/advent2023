@@ -11,7 +11,7 @@ long DistSum(IEnumerable<KeyValuePair<int, int>> e)
 	int lastgalaxy = 0;
 	foreach (var kv in e)
 	{
-		result += prev_galaxies * next_galaxies * (kv.Key - lastgalaxy + Math.Max(0, kv.Key - lastgalaxy - 1) * (factor - 1));
+		result += prev_galaxies * next_galaxies * (1 + Math.Max(0, kv.Key - lastgalaxy - 1) * factor);
 		prev_galaxies += kv.Value;
 		next_galaxies -= kv.Value;
 		lastgalaxy = kv.Key;

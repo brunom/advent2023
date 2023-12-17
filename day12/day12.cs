@@ -1,5 +1,45 @@
+using System;
 using System.Collections.Immutable;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using Xunit;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+
+struct EquatableMemory<T> : IEquatable<EquatableMemory<T>>
+{
+    EquatableMemory(ReadOnlyMemory<T> m)
+    {
+        this.m = m;
+    }
+    public readonly ReadOnlyMemory<T> m;
+
+    public static implicit operator ReadOnlyMemory<T>(EquatableMemory<T> d) => d.m;
+    public static implicit operator EquatableMemory<T>(ReadOnlyMemory<T> d) => new(d);
+    public static implicit operator EquatableMemory<T>(Memory<T> d) => new(d);
+
+    override public bool Equals(object? obj)
+    {
+        if (obj is not EquatableMemory<T> other)
+            return false;
+        return Equals(other);
+    }
+
+    public bool Equals(EquatableMemory<T> other)
+    {
+        return MemoryExtensions.SequenceEqual(this.m.Span, other.m.Span);
+    }
+
+    override public int GetHashCode()
+    {
+        var code = new HashCode();
+        foreach (var e in m.Span)
+        {
+            code.Add(e);
+        }
+        return code.ToHashCode();
+    }
+}
 
 public class day12
 {
@@ -21,8 +61,9 @@ public class day12
             Enumerable.Repeat(groups, unfolding)
             .SelectMany(x => x)
             .ToImmutableArray();
-
-        return Arrangements(springs.AsMemory(), groups.AsMemory()).Last();
+        Dictionary<(EquatableMemory<char> springs, EquatableMemory<int> groups), long> cache = new();
+        var result = Arrangements(springs.AsMemory(), groups.AsMemory(), cache);
+        return result;
     }
 
     static bool Any(ReadOnlySpan<char> s, char ch)
@@ -34,7 +75,10 @@ public class day12
         }
         return false;
     }
-    static long Arrangements(ReadOnlySpan<char> springs, ReadOnlySpan<int> groups)
+    static long Arrangements(
+        ReadOnlyMemory<char> springs,
+        ReadOnlyMemory<int> groups,
+        Dictionary<(EquatableMemory<char> springs, EquatableMemory<int> groups), long> cache)
     {
         if (groups.Length == 0)
         {
@@ -48,8 +92,11 @@ public class day12
             }
         }
 
-        long sum = 0;
-        bool signaled_arrangeable = false;
+        if (cache.TryGetValue((springs, groups), out long sum))
+        {
+            return sum;
+        }
+
         int mid = groups.Length / 2;
         for (int i = 0; i + groups.Span[mid] <= springs.Length; ++i)
         {
@@ -80,12 +127,13 @@ public class day12
                     continue;
             }
 
-            var lhs = Arrangements(springs[..prev], groups[..mid]);
-            var rhs = Arrangements(springs[next..], groups[(mid + 1)..]);
+            var lhs = Arrangements(springs[..prev], groups[..mid], cache);
+            var rhs = Arrangements(springs[next..], groups[(mid + 1)..], cache);
 
             sum += lhs * rhs;
         }
 
+        cache.Add((springs, groups), sum);
         return sum;
     }
 

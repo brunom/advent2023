@@ -3,10 +3,17 @@ using Xunit;
 
 public class day12
 {
-    static long Arrangements(string s)
+    static long Arrangements(string s) => Arrangements(s, 1);
+    static long Arrangements5(string s) => Arrangements(s, 5);
+    static long Arrangements(string s, int unfolding)
     {
         if (s.Split() is not [string springs, string sgroups])
             throw new NotImplementedException();
+
+        // TODO repeat after parse
+        springs = string.Join('?', Enumerable.Repeat(springs, unfolding));
+        sgroups = string.Join(',', Enumerable.Repeat(sgroups, unfolding));
+
         var groups =
             sgroups
             .Split(',')
@@ -43,7 +50,7 @@ public class day12
         {
             if (springs[i..(i + groups[mid])].Any(ch => ch == '.'))
                 continue;
-            
+
             int prev;
             if (i == 0)
             {
@@ -108,4 +115,6 @@ public class day12
     [Fact] public void Test_Arrangements_Line6() => Assert.Equal(10, Arrangements("?###???????? 3,2,1"));
     [Fact] public void Test_part1_example() => Assert.Equal(21, File.ReadLines("example.txt").Sum(Arrangements));
     [Fact] public void Test_part1_input() => Assert.Equal(7084, File.ReadLines("input.txt").Sum(Arrangements));
+    [Fact] public void Test_part2_example() => Assert.Equal(525152, File.ReadLines("example.txt").Sum(Arrangements5));
+    [Fact] public void Test_part2_input() => Assert.Equal(8414003326821, File.ReadLines("input.txt").Sum(Arrangements5));
 }

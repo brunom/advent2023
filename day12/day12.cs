@@ -25,11 +25,6 @@ public class day12
         return Arrangements(springs.AsMemory(), groups.AsMemory()).Last();
     }
 
-    enum Arrangeable
-    {
-        No = -1,
-        Yes = -2,
-    }
     static bool Any(ReadOnlySpan<char> s, char ch)
     {
         foreach (var ch2 in s)
@@ -39,19 +34,17 @@ public class day12
         }
         return false;
     }
-    static IEnumerable<long> Arrangements(ReadOnlyMemory<char> springs, ReadOnlyMemory<int> groups)
+    static long Arrangements(ReadOnlySpan<char> springs, ReadOnlySpan<int> groups)
     {
         if (groups.Length == 0)
         {
             if (Any(springs.Span, '#'))
             {
-                yield return (long)Arrangeable.No;
-                yield return 0;
+                return 0;
             }
             else
             {
-                yield return (long)Arrangeable.Yes;
-                yield return 1;
+                return 1;
             }
         }
 
@@ -87,36 +80,13 @@ public class day12
                     continue;
             }
 
-            using var lhs = Arrangements(springs[..prev], groups[..mid]).GetEnumerator();
-            if (!lhs.MoveNext()) throw new NotImplementedException();
-            if (lhs.Current == (long)Arrangeable.No)
-                continue;
+            var lhs = Arrangements(springs[..prev], groups[..mid]);
+            var rhs = Arrangements(springs[next..], groups[(mid + 1)..]);
 
-            var rhs = Arrangements(springs[next..], groups[(mid + 1)..]).GetEnumerator();
-            if (!rhs.MoveNext()) throw new NotImplementedException();
-            if (rhs.Current == (long)Arrangeable.No)
-                continue;
-
-            if (!lhs.MoveNext()) throw new NotImplementedException();
-            if (!rhs.MoveNext()) throw new NotImplementedException();
-
-            if (!signaled_arrangeable)
-            {
-                signaled_arrangeable = true;
-                yield return (long)Arrangeable.Yes;
-            }
-            sum += lhs.Current * rhs.Current;
+            sum += lhs * rhs;
         }
 
-        if (!signaled_arrangeable)
-        {
-            yield return (long)Arrangeable.No;
-            yield return 0;
-        }
-        else
-        {
-            yield return sum;
-        }
+        return sum;
     }
 
     [Fact] public void Test_Arrangements_Line1() => Assert.Equal(1, Arrangements("???.### 1,1,3"));

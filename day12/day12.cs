@@ -3,23 +3,26 @@ using Xunit;
 
 public class day12
 {
-    static long Arrangements(string s) => Arrangements(s, 1);
-    static long Arrangements5(string s) => Arrangements(s, 5);
+    public static long Arrangements(string s) => Arrangements(s, 1);
+    public static long Arrangements5(string s) => Arrangements(s, 5);
     static long Arrangements(string s, int unfolding)
     {
         if (s.Split() is not [string springs, string sgroups])
             throw new NotImplementedException();
-
-        // TODO repeat after parse
-        springs = string.Join('?', Enumerable.Repeat(springs, unfolding));
-        sgroups = string.Join(',', Enumerable.Repeat(sgroups, unfolding));
 
         var groups =
             sgroups
             .Split(',')
             .Select(s => int.Parse(s))
             .ToImmutableArray();
-        return Arrangements(springs, groups).Last();
+
+        springs = string.Join('?', Enumerable.Repeat(springs, unfolding));
+        groups =
+            Enumerable.Repeat(groups, unfolding)
+            .SelectMany(x => x)
+            .ToImmutableArray();
+
+        return Arrangements(springs.AsMemory(), groups.AsMemory()).Last();
     }
 
     enum Arrangeable
@@ -27,11 +30,20 @@ public class day12
         No = -1,
         Yes = -2,
     }
-    static IEnumerable<long> Arrangements(string springs, ImmutableArray<int> groups)
+    static bool Any(ReadOnlySpan<char> s, char ch)
     {
-        if (!groups.Any())
+        foreach (var ch2 in s)
         {
-            if (springs.Any(ch => ch == '#'))
+            if (ch2 == ch)
+                return true;
+        }
+        return false;
+    }
+    static IEnumerable<long> Arrangements(ReadOnlyMemory<char> springs, ReadOnlyMemory<int> groups)
+    {
+        if (groups.Length == 0)
+        {
+            if (Any(springs.Span, '#'))
             {
                 yield return (long)Arrangeable.No;
                 yield return 0;
@@ -46,9 +58,9 @@ public class day12
         long sum = 0;
         bool signaled_arrangeable = false;
         int mid = groups.Length / 2;
-        for (int i = 0; i + groups[mid] <= springs.Length; ++i)
+        for (int i = 0; i + groups.Span[mid] <= springs.Length; ++i)
         {
-            if (springs[i..(i + groups[mid])].Any(ch => ch == '.'))
+            if (Any(springs[i..(i + groups.Span[mid])].Span, '.'))
                 continue;
 
             int prev;
@@ -59,19 +71,19 @@ public class day12
             else
             {
                 prev = i - 1;
-                if (springs[prev] == '#')
+                if (springs.Span[prev] == '#')
                     continue;
             }
 
             int next;
-            if (i + groups[mid] == springs.Length)
+            if (i + groups.Span[mid] == springs.Length)
             {
                 next = springs.Length;
             }
             else
             {
-                next = i + groups[mid] + 1;
-                if (springs[i + groups[mid]] == '#')
+                next = i + groups.Span[mid] + 1;
+                if (springs.Span[i + groups.Span[mid]] == '#')
                     continue;
             }
 

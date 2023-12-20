@@ -1,15 +1,28 @@
+using FsCheck;
+using FsCheck.Xunit;
+using Microsoft.FSharp.Collections;
 using System.Collections.Immutable;
+using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using Xunit;
 
 Console.WriteLine(
+
     //new[] { ".???#??.?##?#??? 1,1,7" }
     //new[] { ".???#?? 1,1" }
-    new[] { "?.#.? 1,1" }
-    //new[] { ".??...? 2,1" }
-    .Select(day12.Parse)
-    .Select(x => (rec: day12.ArrangementsRec(x), tab: day12.ArrangementsTable(x)))
-    .Select((p, i) => (p.rec, p.tab, i))
-    .Where(x => x.rec != x.tab)
+    //new[] { "?.#.? 1,1" }
+
+    //new[] { "#.? 1" }
+    //new[] { "#.??#? 1,2" }
+    new[] { "## 1" }
+
+    //File.ReadLines("input.txt")
+    .Select(line => (line, sg: day12.Parse(line)))
+
+    //new[] { ("#", Enumerable.Empty<int>().ToImmutableArray()), }
+
+    .Select(x => (x.line, rec: day12.ArrangementsRec(x.sg), tab: day12.ArrangementsTable(x.sg)))
+    //.Where(x => x.rec != x.tab)
     .FirstOrDefault());
 struct EquatableMemory<T> : IEquatable<EquatableMemory<T>>
 {
@@ -48,72 +61,83 @@ struct EquatableMemory<T> : IEquatable<EquatableMemory<T>>
 
 public class day12
 {
-    public static (string springs, ImmutableArray<int> groups) Parse(string s)
+    public readonly record struct Puzzle(string springs, ImmutableArray<int> damaged_groups);
+
+    public static Puzzle Parse(string s)
     {
         if (s.Split() is not [string springs, string sgroups])
             throw new NotImplementedException();
 
         var groups =
             sgroups
-            .Split(',')
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
             .Select(s => int.Parse(s))
             .ToImmutableArray();
-        return (springs, groups);
+        return new(springs, groups);
     }
-    public static (string springs, ImmutableArray<int> groups) Unfold(int unfolding, (string springs, ImmutableArray<int> groups) sg)
+    public static Puzzle Unfold(int unfolding, Puzzle sg)
     {
-        return (
+        return new(
             string.Join('?', Enumerable.Repeat(sg.springs, unfolding)),
-            Enumerable.Repeat(sg.groups, unfolding)
+            Enumerable.Repeat(sg.damaged_groups, unfolding)
                 .SelectMany(x => x)
                 .ToImmutableArray());
     }
-    public static long ArrangementsTable((
-        string springs,
-        ImmutableArray<int> groups) sg)
+    public static long ArrangementsTable(Puzzle sg)
     {
-        var arr = new long[sg.springs.Length, sg.groups.Length];
-        int damaged = 0;
+        if (sg.springs.Length == 0 && sg.damaged_groups.Length == 0)
+            return 1;
+        if (sg.springs.Length != 0 && sg.damaged_groups.Length == 0)
+            return MemoryExtensions.Contains(sg.springs, '#') ? 0 : 1;
+        if (sg.springs.Length == 0 && sg.damaged_groups.Length != 0)
+            return 0;
+
+        var arr = new long[sg.springs.Length, sg.damaged_groups.Length];
+        int last_operational = 0;
+        int last_damaged = 0;
         for (int s = 0; s < sg.springs.Length; s++)
         {
             if (sg.springs[s] == '.')
-                damaged = 0;
+                last_operational = 0;
             else
-                damaged++;
+                last_operational++;
 
-            for (int g = 0; g < sg.groups.Length; g++)
+            if (sg.springs[s] == '#')
+                last_damaged = 0;
+            else
+                last_damaged++;
+
+            for (int g = 0; g < sg.damaged_groups.Length; g++)
             {
                 long prev;
                 if (s == 0)
                     prev = 0;
-                else if (sg.springs[s] == '#' && g + 1 == sg.groups.Length)
+                else if (sg.springs[s] == '#')
                     prev = 0;
                 else
                     prev = arr[s - 1, g];
 
                 long curr;
-                if (damaged < sg.groups[g])
+                if (last_operational < sg.damaged_groups[g])
                     curr = 0;
-                else if (sg.groups[g] <= s && sg.springs[s - sg.groups[g]] == '#')
+                else if (sg.damaged_groups[g] <= s && sg.springs[s - sg.damaged_groups[g]] == '#')
                     curr = 0;
                 else if (s + 1 < sg.springs.Length && sg.springs[s + 1] == '#')
                     curr = 0;
                 else if (g == 0)
-                    curr = 1;
-                else if (1 + sg.groups[g] <= s)
-                    curr = arr[s - sg.groups[g] - 1, g - 1];
+                    curr = 1; //BAD
+                else if (1 + sg.damaged_groups[g] <= s)
+                    curr = arr[s - sg.damaged_groups[g] - 1, g - 1];
                 else
                     curr = 0;
 
                 arr[s, g] = prev + curr;
             }
         }
-        return arr[sg.springs.Length - 1, sg.groups.Length - 1];
+        return arr[sg.springs.Length - 1, sg.damaged_groups.Length - 1];
     }
 
-    public static long ArrangementsRec((
-        string springs,
-        ImmutableArray<int> groups) sg) => ArrangementsRecImpl(sg.springs.AsMemory(), sg.groups.AsMemory(), new());
+    public static long ArrangementsRec(Puzzle sg) => ArrangementsRecImpl(sg.springs.AsMemory(), sg.damaged_groups.AsMemory(), new());
     static long ArrangementsRecImpl(
         ReadOnlyMemory<char> springs,
         ReadOnlyMemory<int> groups,
@@ -177,8 +201,30 @@ public class day12
         return sum;
     }
 
-    static long Arrangements((string springs, ImmutableArray<int> groups) sg) => ArrangementsTable(sg);
+    static long Arrangements(Puzzle sg) => ArrangementsTable(sg);
 
+
+
+    [Property]
+    public Property TableMatchesRec()
+    {
+        // TODO reducir ? a . o #
+
+        //var ss = Gen.ListOf(Gen.Elements<char>(".#?"));
+        //return Prop.ForAll<FSharpList<char>, PositiveInt[]>(ss.ToArbitrary(), (s0, g0) =>
+        //{
+        //    var s = s0.ToString();
+        //    var g = g0.Select(x => x.Get).ToImmutableArray();
+        //    return ArrangementsRec((s, g)) == ArrangementsTable((s, g));
+        //});
+        return Prop.ForAll<NonNull<string>, PositiveInt[]>((s0, g0) =>
+        {
+            var s = s0.Get;
+            var g = g0.Select(x => x.Get).ToImmutableArray();
+            return ArrangementsRec(new(s, g)) == ArrangementsTable(new(s, g));
+        });
+
+    }
     [Fact] public void Test_Arrangements_Line1() => Assert.Equal(1, Arrangements(Parse("???.### 1,1,3")));
     [Fact] public void Test_Arrangements_Line2() => Assert.Equal(4, Arrangements(Parse(".??..??...?##. 1,1,3")));
     [Fact] public void Test_Arrangements_Line3() => Assert.Equal(1, Arrangements(Parse("?#?#?#?#?#?#?#? 1,3,1,6")));

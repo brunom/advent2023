@@ -93,19 +93,17 @@ public class day12
             return 0;
 
         var arr = new long[sg.springs.Length, sg.damaged_groups.Length];
-        int last_operational = 0;
-        int last_damaged = 0;
+        int max_damaged = 0;
+        int? first_damaged = null;
         for (int s = 0; s < sg.springs.Length; s++)
         {
             if (sg.springs[s] == '.')
-                last_operational = 0;
+                max_damaged = 0;
             else
-                last_operational++;
+                max_damaged++;
 
-            if (sg.springs[s] == '#')
-                last_damaged = 0;
-            else
-                last_damaged++;
+            if (!first_damaged.HasValue && sg.springs[s] == '#')
+                first_damaged = s;
 
             for (int g = 0; g < sg.damaged_groups.Length; g++)
             {
@@ -118,15 +116,18 @@ public class day12
                     prev = arr[s - 1, g];
 
                 long curr;
-                if (last_operational < sg.damaged_groups[g])
+                if (max_damaged < sg.damaged_groups[g])
                     curr = 0;
                 else if (sg.damaged_groups[g] <= s && sg.springs[s - sg.damaged_groups[g]] == '#')
                     curr = 0;
-                else if (s + 1 < sg.springs.Length && sg.springs[s + 1] == '#')
-                    curr = 0;
                 else if (g == 0)
-                    curr = 1; //BAD
-                else if (1 + sg.damaged_groups[g] <= s)
+                {
+                    if (first_damaged + sg.damaged_groups[g] < s)
+                        curr = 0;
+                    else
+                        curr = 1;
+                }
+                else if (sg.damaged_groups[g] + 1 <= s)
                     curr = arr[s - sg.damaged_groups[g] - 1, g - 1];
                 else
                     curr = 0;
@@ -204,22 +205,19 @@ public class day12
     static long Arrangements(Puzzle sg) => ArrangementsTable(sg);
 
 
+    enum P
+    {
+        Damaged = '#',
+        Any = '?',
+        Operational = '.',
+    };
 
     [Property]
     public Property TableMatchesRec()
     {
-        // TODO reducir ? a . o #
-
-        //var ss = Gen.ListOf(Gen.Elements<char>(".#?"));
-        //return Prop.ForAll<FSharpList<char>, PositiveInt[]>(ss.ToArbitrary(), (s0, g0) =>
-        //{
-        //    var s = s0.ToString();
-        //    var g = g0.Select(x => x.Get).ToImmutableArray();
-        //    return ArrangementsRec((s, g)) == ArrangementsTable((s, g));
-        //});
-        return Prop.ForAll<NonNull<string>, PositiveInt[]>((s0, g0) =>
+        return Prop.ForAll<P[], PositiveInt[]>((s0, g0) =>
         {
-            var s = s0.Get;
+            var s = new string(s0.Select(x => (char)x).ToArray());
             var g = g0.Select(x => x.Get).ToImmutableArray();
             return ArrangementsRec(new(s, g)) == ArrangementsTable(new(s, g));
         });

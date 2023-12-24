@@ -33,7 +33,7 @@ public class Day24
             ha.pos.z + ha.vel.z * ta);
         return (ta, pa);
     }
-    public static long Intersections(IReadOnlyList<Hail> hails, Vec testmin, Vec testmax)
+    public static long Intersections(IReadOnlyList<Hail> hails, double min, double max)
     {
         long result = 0;
         for (int ia = 0; ia < hails.Count; ia++)
@@ -50,13 +50,13 @@ public class Day24
                     continue;
                 if (tb < 0)
                     continue;
-                if (pa.x < testmin.x)
+                if (pa.x < min)
                     continue;
-                if (pa.y < testmin.y)
+                if (pa.y < min)
                     continue;
-                if (testmax.x < pa.x)
+                if (max < pa.x)
                     continue;
-                if (testmax.y < pa.y)
+                if (max < pa.y)
                     continue;
                 result++;
             }
@@ -64,7 +64,7 @@ public class Day24
         return result;
     }
 
-    [Fact] public void Test_part1_example() => Assert.Equal(2, Intersections(ParseFile("example.txt"), new(7, 7, -1), new(27, 27, -1)));
-    [Fact] public void Test_part1_input() => Assert.Equal(17867, Intersections(ParseFile("input.txt"), new(200000000000000, 200000000000000, -1), new(400000000000000, 400000000000000, -1)));
+    [Fact] public void Test_part1_example() => Assert.Equal(2, Intersections(ParseFile("example.txt"), 7, 27));
+    [Fact] public void Test_part1_input() => Assert.Equal(17867, Intersections(ParseFile("input.txt"), 200000000000000, 400000000000000));
 
 }

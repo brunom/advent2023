@@ -2,6 +2,7 @@ using FsCheck;
 using FsCheck.Xunit;
 using Microsoft.FSharp.Collections;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Xunit;
@@ -138,8 +139,15 @@ public class day12
         return arr[sg.springs.Length - 1, sg.damaged_groups.Length - 1];
     }
 
-    public static long ArrangementsRec(Puzzle sg) => ArrangementsRecImpl(sg.springs.AsMemory(), sg.damaged_groups.AsMemory(), new());
-    static long ArrangementsRecImpl(
+
+    public static long ArrangementsRec(Puzzle sg) => ArrangementsRecImpl(sg.springs.AsMemory(), sg.damaged_groups.AsMemory(), new()).Last();
+
+    enum Arrangeable
+    {
+        No = -100000,
+        Yes = -200000,
+    }
+    static IEnumerable<long> ArrangementsRecImpl(
         ReadOnlyMemory<char> springs,
         ReadOnlyMemory<int> groups,
         Dictionary<(EquatableMemory<char> springs, EquatableMemory<int> groups), long> cache)
@@ -148,20 +156,29 @@ public class day12
         {
             if (MemoryExtensions.Contains(springs.Span, '#'))
             {
-                return 0;
+                yield return (long)Arrangeable.No;
+                yield return 0;
             }
             else
             {
-                return 1;
+                yield return (long)Arrangeable.Yes;
+                yield return 1;
             }
+            yield break;
         }
 
         // cache can also use ReadOnlyMemory, with lower hit rate.
         if (cache.TryGetValue((springs, groups), out long sum))
-        {
-            return sum;
+        {            
+            if (sum == 0)
+                yield return (long)Arrangeable.No;
+            else
+                yield return (long)Arrangeable.Yes;
+            yield return sum;
+            yield break;
         }
 
+        bool signaled_arrangeable = false;
         int mid = groups.Length / 2;
         for (int i = 0; i + groups.Span[mid] <= springs.Length; ++i)
         {
@@ -192,14 +209,44 @@ public class day12
                     continue;
             }
 
-            var lhs = ArrangementsRecImpl(springs[..prev], groups[..mid], cache);
-            var rhs = ArrangementsRecImpl(springs[next..], groups[(mid + 1)..], cache);
+            using var lhs = ArrangementsRecImpl(springs[..prev], groups[..mid], cache).GetEnumerator();
+            if (!lhs.MoveNext()) throw new NotImplementedException();
+            if (lhs.Current == (long)Arrangeable.No)
+                continue;
 
-            sum += lhs * rhs;
+            var rhs = ArrangementsRecImpl(springs[next..], groups[(mid + 1)..], cache).GetEnumerator();
+            if (!rhs.MoveNext()) throw new NotImplementedException();
+            if (rhs.Current == (long)Arrangeable.No)
+                continue;
+
+            if (!lhs.MoveNext()) throw new NotImplementedException();
+            if (!rhs.MoveNext()) throw new NotImplementedException();
+
+            if (!signaled_arrangeable)
+            {
+                signaled_arrangeable = true;
+                yield return (long)Arrangeable.Yes;
+                if (cache.TryGetValue((springs, groups), out sum))
+                {
+                    yield return sum;
+                    yield break;
+                }
+            }
+
+            sum += lhs.Current * rhs.Current;
         }
 
         cache.Add((springs, groups), sum);
-        return sum;
+
+        if (!signaled_arrangeable)
+        {
+            yield return (long)Arrangeable.No;
+            yield return 0;
+        }
+        else
+        {
+            yield return sum;
+        }
     }
 
     static long Arrangements(Puzzle sg) => ArrangementsTable(sg);

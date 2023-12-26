@@ -165,29 +165,55 @@ public class Day23
     }
     public static int? Longest(Graph graph)
     {
-        int target_irow = graph.v.Max(x => x.Key.irow);
-        HashSet<(int irow, int icol)> visited = new();
-        var comparer = Comparer<int?>.Default;
-        int? impl((int irow, int icol) curr)
+        var inode = graph.v.Select((x, inode) => (x.Key.irow, x.Key.icol, inode))
+            .ToDictionary(
+            x => (x.irow, x.icol),
+            x => x.inode);
+        var flat = new (int inode, int len)[graph.v.Count, 4];
+        foreach (var x in graph.v)
         {
-            if (visited.Contains(curr))
+            int inode_curr = inode[x.Key];
+
+            // cycle detected by visited
+            flat[inode_curr, 0] = (inode_curr, 0);
+            flat[inode_curr, 1] = (inode_curr, 0);
+            flat[inode_curr, 2] = (inode_curr, 0);
+            flat[inode_curr, 3] = (inode_curr, 0);
+            int ie = 0;
+            foreach (var y in x.Value)
+            {
+                flat[inode_curr, ie] = (inode[y.Key], y.Value);
+                ++ie;
+            }
+        }
+
+        int inode_target = inode[graph.v.Keys.OrderByDescending(x => x.irow).First()];
+        var visited = new bool[flat.Length];
+        var comparer = Comparer<int?>.Default;
+        int? impl(int inode_curr)
+        {
+            if (visited[inode_curr])
                 return null;
-            if (curr.irow == target_irow)
+            if (inode_curr == inode_target)
                 return 0;
 
-            visited.Add(curr);
+            visited[inode_curr] = true;
             int? result = null;
-            foreach (var e in graph.v[curr])
+            for (int ie = 0; ie < 4; ++ie)
             {
+                //if (flat[inode_curr, i].inode == inode_curr)
+                //    continue; // avoid call
+
+                var rec = impl(flat[inode_curr, ie].inode) + flat[inode_curr, ie].len;
+
                 // < is broken for nullables
-                var rec = impl(e.Key) + e.Value;
                 if (comparer.Compare(result, rec) < 0)
                     result = rec;
             }
-            visited.Remove(curr);
+            visited[inode_curr] = false;
             return result;
         }
-        return impl((0, 1));
+        return impl(inode[(0, 1)]);
     }
 
     [Fact] public void Test_part1_example() => Assert.Equal(94, Longest("example.txt", part: 1));

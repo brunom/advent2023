@@ -167,6 +167,7 @@ public class Day23
     {
         int target_irow = graph.v.Max(x => x.Key.irow);
         HashSet<(int irow, int icol)> visited = new();
+        var comparer = Comparer<int?>.Default;
         int? impl((int irow, int icol) curr)
         {
             if (visited.Contains(curr))
@@ -178,21 +179,10 @@ public class Day23
             int? result = null;
             foreach (var e in graph.v[curr])
             {
-                //var rec = impl(e.Key);
-                //result = new[] { result, rec + e.Value }.Max();
-
-                var rec = impl(e.Key);
-                if (rec.HasValue)
-                {
-                    if (result.HasValue)
-                    {
-                        result = Math.Max(result.Value, rec.Value + e.Value);
-                    }
-                    else
-                    {
-                        result = rec.Value + e.Value;
-                    }
-                }
+                // < is broken for nullables
+                var rec = impl(e.Key) + e.Value;
+                if (comparer.Compare(result, rec) < 0)
+                    result = rec;
             }
             visited.Remove(curr);
             return result;

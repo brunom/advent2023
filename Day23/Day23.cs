@@ -1,7 +1,7 @@
+using System.Collections.Immutable;
 using System.Diagnostics;
 using Xunit;
 
-Console.WriteLine(new Day23().Longest("input.txt", part: 2));
 
 public class Day23
 {
@@ -115,52 +115,151 @@ public class Day23
         Dump();
     }
 
+    public readonly record struct Graph(Dictionary<(int irow, int icol), Dictionary<(int irow, int icol), int>> v);
+
+    public static Graph LoadGraph(string filename)
+    {
+        var paths =
+            File.ReadLines(filename)
+            .SelectMany((row, irow) => row.Select((ch, icol) => (irow, icol, ch)))
+            .Where(x => x.ch != '#')
+            .Select(x => (x.irow, x.icol))
+            .ToImmutableHashSet();
+        return new(
+            paths
+            .Select(x => (
+                x.irow,
+                x.icol,
+                edges: new (int irow, int icol)[]
+                {
+                    (x.irow-1, x.icol),
+                    (x.irow+1, x.icol),
+                    (x.irow, x.icol-1),
+                    (x.irow, x.icol+1),
+                }))
+            .ToDictionary(
+                x => (x.irow, x.icol),
+                x =>
+                    x.edges
+                    .Where(e => paths.Contains((e.irow, e.icol)))
+                    .ToDictionary(
+                        x => (x.irow, x.icol),
+                        _ => 1)));
+    }
+    public static void Reduce(Graph graph)
+    {
+        foreach (var x in graph.v)
+        {
+            if (x.Value.Count == 2)
+            {
+                var n1 = x.Value.First();
+                var n2 = x.Value.Last();
+
+                graph.v.Remove(x.Key);
+                graph.v[n1.Key].Remove(x.Key);
+                graph.v[n2.Key].Remove(x.Key);
+                graph.v[n1.Key].Add(n2.Key, n1.Value + n2.Value);
+                graph.v[n2.Key].Add(n1.Key, n1.Value + n2.Value);
+            }
+        }
+    }
+    public static int? Longest(Graph graph)
+    {
+        int target_irow = graph.v.Max(x => x.Key.irow);
+        HashSet<(int irow, int icol)> visited = new();
+        int? impl((int irow, int icol) curr)
+        {
+            if (visited.Contains(curr))
+                return null;
+            if (curr.irow == target_irow)
+                return 0;
+
+            visited.Add(curr);
+            int? result = null;
+            foreach (var e in graph.v[curr])
+            {
+                //var rec = impl(e.Key);
+                //result = new[] { result, rec + e.Value }.Max();
+
+                var rec = impl(e.Key);
+                if (rec.HasValue)
+                {
+                    if (result.HasValue)
+                    {
+                        result = Math.Max(result.Value, rec.Value + e.Value);
+                    }
+                    else
+                    {
+                        result = rec.Value + e.Value;
+                    }
+                }
+            }
+            visited.Remove(curr);
+            return result;
+        }
+        return impl((0, 1));
+    }
+
     [Fact] public void Test_part1_example() => Assert.Equal(94, Longest("example.txt", part: 1));
     [Fact] public void Test_part1_input() => Assert.Equal(2414, Longest("input.txt", part: 1));
     [Fact] public void Test_part2_example() => Assert.Equal(154, Longest("example.txt", part: 2));
-    [Fact] public void Test_part2_input() => Assert.Equal(0000, Longest("input.txt", part: 2));
-    public long Longest(string filename, int part)
+    [Fact]
+    public void Test_part2_reduced_example()
+    {
+        var g = LoadGraph("example.txt");
+        Reduce(g);
+        Assert.Equal(154, Longest(g));
+    }
+    [Fact]
+    public void Test_part2_reduced_input()
+    {
+        var g = LoadGraph("input.txt");
+        Reduce(g);
+        Assert.Equal(6598, Longest(g));
+    }
+
+    public int Longest(string filename, int part)
     {
         string[] lines = File.ReadAllLines(filename);
-        int rows = lines.Length;
-        int cols = lines[0].Length;
-        HashSet<(int row, int col)> visited = new();
-        long impl((int row, int col) prev, (int row, int col) curr)
+        int nrows = lines.Length;
+        int ncols = lines[0].Length;
+        HashSet<(int irow, int icol)> visited = new();
+        int impl((int irow, int icol) prev, (int irow, int icol) curr)
         {
             if (visited.Contains(curr))
                 return 0;
-            if (curr.row < 0)
+            if (curr.irow < 0)
                 return 0;
-            if (rows <= curr.row)
+            if (nrows <= curr.irow)
                 return 0;
-            if (curr.col < 0)
+            if (curr.icol < 0)
                 return 0;
-            if (cols <= curr.col)
+            if (ncols <= curr.icol)
                 return 0;
-            if (lines[curr.row][curr.col] == '#')
+            if (lines[curr.irow][curr.icol] == '#')
                 return 0;
             if (part == 1)
             {
-                if (lines[curr.row][curr.col] == '>' && prev.col + 1 != curr.col)
+                if (lines[curr.irow][curr.icol] == '>' && prev.icol + 1 != curr.icol)
                     return 0;
-                if (lines[curr.row][curr.col] == 'v' && prev.row + 1 != curr.row)
+                if (lines[curr.irow][curr.icol] == 'v' && prev.irow + 1 != curr.irow)
                     return 0;
             }
-            if (curr == (rows - 1, cols - 2))
+            if (curr == (nrows - 1, ncols - 2))
                 return 1;
 
             visited.Add(curr);
-            long result = 0;
-            result = Math.Max(result, impl(curr, (curr.row + 1, curr.col)));
-            result = Math.Max(result, impl(curr, (curr.row - 1, curr.col)));
-            result = Math.Max(result, impl(curr, (curr.row, curr.col + 1)));
-            result = Math.Max(result, impl(curr, (curr.row, curr.col - 1)));
+            int result = 0;
+            result = Math.Max(result, impl(curr, (curr.irow + 1, curr.icol)));
+            result = Math.Max(result, impl(curr, (curr.irow - 1, curr.icol)));
+            result = Math.Max(result, impl(curr, (curr.irow, curr.icol + 1)));
+            result = Math.Max(result, impl(curr, (curr.irow, curr.icol - 1)));
             visited.Remove(curr);
             if (result == 0)
                 return 0;
             return result + 1;
         }
-        TaskCompletionSource<long> source = new();
+        TaskCompletionSource<int> source = new();
         new Thread(() => source.SetResult(impl((0, 1), (1, 1))), 111222333).Start();
         return source.Task.Result;
     }

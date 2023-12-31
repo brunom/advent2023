@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Numerics;
 using System.Security.Cryptography;
 using Xunit;
 
@@ -9,12 +10,24 @@ new Day25().Test_part1_example();
 
 public class Day25
 {
-    public readonly record struct Graph(Dictionary<string, (int size, Dictionary<string, int> connections)> v);
+
+    public readonly record struct Node(int i)
+    {
+        public Node(string s) : this(toint(s)) { }
+
+        static int toint(string s)
+        {
+            if (s.Length != 3)
+                throw new NotImplementedException();
+            return (s[0] << 16) | (s[1] << 8) | (s[2] << 0);
+        }
+    }
+    public readonly record struct Graph(Dictionary<Node, (int size, Dictionary<Node, int> connections)> v);
     static void Dump(Graph graph)
     {
         foreach (var kv in graph.v)
         {
-            string src = kv.Key;
+            Node src = kv.Key;
             Console.Write((src, kv.Value.size));
             Console.Write(':');
             foreach (var dst in kv.Value.connections)
@@ -29,13 +42,13 @@ public class Day25
     static Graph Load(string path)
     {
         Graph graph = new(new());
-        void Add(string lhs, string rhs)
+        void Add(Node lhs, Node rhs)
         {
-            string plus =
-                ",bbn,msb,jcx,gfl,jhf,hlq,zlz,rbs,dcs,dph,hmf,djd,nxs,ltn,slq,tsm,xpg,vdn,czr,szv,cvb,bjr,gkj,gmd,dzs,mvq,gcn,scd,vkp,vdp,zct,xfp,qbv,qrv,lrz,bdn,fqq,ttm,xsp,jst,fsl,vpf,lmd,klc,vbg,mnc,zdc,gpk,pqf,rgl,klz,lcs,hvx,gfq,vgt,sxs,zgt,vhd,dmd,zxr,fjm,mgj,fhn,kxv,fgc,hgr,rqq,qns,zvt,dff,jkh,mpn,lbx,vpv,jms,ngm,lsp,qcj,gkl,pdf,cnr,qjf,fbx,gfn,hrn,hnb,xnz,hjc,cvk,bts,hcl,rsp,tqb,hfb,mbz,htl,dbc,qhr,ztx,mzz,pqq,ndg,hhp,mnj,ztt,sqx,nhb,rxk,ghf,dvf,lcp,cvs,tnz,qpj,dbq,nlv,mns,fjz,dqn,psq,vzj,lbd,hcp,jdf,txb,qlc,mmk,jlc,tmj,qbr,fsx,rkb,gbq,rkl,rbn,bxb,mcx,hpc,hdm,tfq,nbf,fkq,mfn,qds,jfj,tkl,zqk,bfh,czm,mpg,djh,gmk,tsr,nlh,zcz,bqp,knz,pcc,ckx,xvf,zfz,xsn,lpd,mfm,rvb,ntn,fgt,tcc,rcf,tbv,vrl,sdj,pfd,gbc,hsr,jkm,kcc,nrd,zrc,mgm,ptb,jvl,hmh,qbz,kdx,dht,tbh,kmv,gjv,gjq,dxz,hvb,tfx,kpm,npk,bdx,bvc,pdl,ppz,sln,zkk,dxn,vrt,shl,jnt,kmm,jlh,tkf,tgb,dnc,zdh,trr,jct,jpf,bnp,lzv,npm,mst,kfk,hvr,jdc,tqv,tcj,cns,txg,gnc,jpp,rjm,dxr,dlc,vlk,qpd,klv,dqg,sfg,rgr,bbx,fdc,tsb,dsh,nlp,ggf,nhv,vvr,zkv,fgd,zqn,csx,jlb,djg,pgt,mlg,xzc,lkn,hst,pct,tzj,cmj,lgx,vxm,ltt,htm,ssl,tql,bfr,ctl,qfk,xbj,zpr,cmr,nhq,fml,cvp,zbp,jfs,mms,qsj,xfn,sql,ttk,llt,lhj,spb,kpj,flq,hmm,kts,mdg,vkn,dqm,kjl,phf,jsg,rvm,hsh,nbl,xmb,xkt,fhz,hpr,fcv,xzz,dnz,ltv,rqx,bzx,plc,cpr,krn,jzb,gmm,vkx,fjk,rtg,lvt,mch,vsf,vvd,jmq,pld,nkh,mnt,fzl,tcr,nbh,psk,hvz,tfp,qgz,jbg,mbr,pnx,fmg,gms,flm,gcd,xvn,nnl,pbh,zzx,ffd,clb,mrv,xxs,zzl,xzk,xnn,nrv,lcq,vfc,pmd,lvv,hcx,mfj,xfl,skx,gtt,vkz,hng,vdh,lmr,ddf,hhc,kpd,mjd,hrl,jbm,dzt,mrm,xcx,xhl,pgj,qfm,czj,mzs,kgd,fxq,kvg,xtp,brd,fxx,xdt,kpc,sgf,rml,ppn,jxg,smd,ssm,hmp,fmj,hdx,kkd,mcg,dlx,hxr,crx,pfc,mff,bgm,jgc,cfc,tsf,xcj,hvq,jfk,jts,xzv,bjp,crk,mhb,mxs,fxk,pcz,vhg,zgr,qxn,pnd,ggk,hcs,qjp,mgx,fdx,mqp,fjt,bzt,gsg,jrz,qxb,csj,grx,gzn,jnk,gfx,jbk,bcd,vgp,jsm,pfx,xtx,xhg,lvb,zjq,psh,bkc,dlb,mnr,kvr,rdz,rlf,xpf,dcr,rzc,kjs,brn,srl,fxz,lqx,vth,bpv,ppl,mzx,dmg,qlr,qnj,thv,sgp,qnm,zqm,qdt,fbk,kkq,mfk,hnk,smr,lxn,kpf,ctn,blt,xzb,cpp,ksd,tjj,qrm,fgv,nhl,vfd,hfc,fgq,gxk,xkz,ddl,jfq,kmh,gxg,dnm,jqs,jvh,ddm,dxh,mkk,cfr,nrn,fbf,pgh,chn,tss,znk,hks,lvk,sfd,pgb,dcp,lrd,zsm,kqd,rdx,kkn,pbc,qzv,qsm,jbh,rqr,pvq,bnx,nhf,qjt,kxg,rzg,lzr,mtq,fsh,lsx,mkh,kqx,qvf,bbt,jls,qmz,vxk,bjt,smj,scv,xxk,msx,nqr,xjt,nbn,xnx,krb,xcl,ghc,zhv,lsl,svx,jrq,fgp,zll,tqm,tlz,bjm,xvd,bzs,vzn,bpg,bcg,sbv,kml,lnp,ndv,kjb,lch,qff,rkc,jxj,pns,slt,gts,njq,mdp,khh,kbl,qdg,dhq,mrt,pxl,qbj,jtc,dpt,mmb,qbs,btk,szf,scf,dxf,ncq,pvh,gfb,fhp,hmd,hvm,tkr,clh,hpj,zxt,vdj,qxd,tpn,jkx,lss,jmg,rcc,hjg,mdm,mft,fxv,vqb,pkq,nkp,bkd,vgh,lkh,dbx,lvd,cnp,jfv,kdk,sft,scj,lcc,sfs,pbj,rvt,qxl,rsv,slv,nhx,rpj,jzn,qgr,rrr,hkf,qcl,fnp,qrc,lkj,hhb,tcb,nkm,rkv,xqn,mdv,hrb,fgs,brb,gch,pkb,qnh,xdj,prh,cnh,tvh,hsm,nks,drp,jdp,kdh,vhb,qkl,tsl,fxm,xfj,bmz,sss,vpl,mjz,cxg,skd,krq,vkl,dtg,dps,cbn,gdt,ntl,xfs,ngg,psg,fch,srd,stp,nct,kfg,sxk,lvq,rlc,drx,rkp,fss,plb,bff,mtx,jmx,klf,fbl,rkm,hgl,jfd,nzn,jlr,jpv,gqm,mbf,dcl,djj,jqv,tmh,pgk,ngz,tvf,xvh,bkm,czp,jnv,gtq,hsj,bzr,qqq,ztc,hdk,kfq,jpl,xvb,zmm,jpc,gfs,ntb,jmh,sqz,fmx,ccf,jxn,lcf,tcd,kvz,lfs,mpq,dmm,zqg,pnm,rrf,cgk,btp,tkm,ttz,zvc,rqp,hmj,mfh,qbm,a,b,c,d,e,f,g,h";
+            //string plus =
+            //    ",bbn,msb,jcx,gfl,jhf,hlq,zlz,rbs,dcs,dph,hmf,djd,nxs,ltn,slq,tsm,xpg,vdn,czr,szv,cvb,bjr,gkj,gmd,dzs,mvq,gcn,scd,vkp,vdp,zct,xfp,qbv,qrv,lrz,bdn,fqq,ttm,xsp,jst,fsl,vpf,lmd,klc,vbg,mnc,zdc,gpk,pqf,rgl,klz,lcs,hvx,gfq,vgt,sxs,zgt,vhd,dmd,zxr,fjm,mgj,fhn,kxv,fgc,hgr,rqq,qns,zvt,dff,jkh,mpn,lbx,vpv,jms,ngm,lsp,qcj,gkl,pdf,cnr,qjf,fbx,gfn,hrn,hnb,xnz,hjc,cvk,bts,hcl,rsp,tqb,hfb,mbz,htl,dbc,qhr,ztx,mzz,pqq,ndg,hhp,mnj,ztt,sqx,nhb,rxk,ghf,dvf,lcp,cvs,tnz,qpj,dbq,nlv,mns,fjz,dqn,psq,vzj,lbd,hcp,jdf,txb,qlc,mmk,jlc,tmj,qbr,fsx,rkb,gbq,rkl,rbn,bxb,mcx,hpc,hdm,tfq,nbf,fkq,mfn,qds,jfj,tkl,zqk,bfh,czm,mpg,djh,gmk,tsr,nlh,zcz,bqp,knz,pcc,ckx,xvf,zfz,xsn,lpd,mfm,rvb,ntn,fgt,tcc,rcf,tbv,vrl,sdj,pfd,gbc,hsr,jkm,kcc,nrd,zrc,mgm,ptb,jvl,hmh,qbz,kdx,dht,tbh,kmv,gjv,gjq,dxz,hvb,tfx,kpm,npk,bdx,bvc,pdl,ppz,sln,zkk,dxn,vrt,shl,jnt,kmm,jlh,tkf,tgb,dnc,zdh,trr,jct,jpf,bnp,lzv,npm,mst,kfk,hvr,jdc,tqv,tcj,cns,txg,gnc,jpp,rjm,dxr,dlc,vlk,qpd,klv,dqg,sfg,rgr,bbx,fdc,tsb,dsh,nlp,ggf,nhv,vvr,zkv,fgd,zqn,csx,jlb,djg,pgt,mlg,xzc,lkn,hst,pct,tzj,cmj,lgx,vxm,ltt,htm,ssl,tql,bfr,ctl,qfk,xbj,zpr,cmr,nhq,fml,cvp,zbp,jfs,mms,qsj,xfn,sql,ttk,llt,lhj,spb,kpj,flq,hmm,kts,mdg,vkn,dqm,kjl,phf,jsg,rvm,hsh,nbl,xmb,xkt,fhz,hpr,fcv,xzz,dnz,ltv,rqx,bzx,plc,cpr,krn,jzb,gmm,vkx,fjk,rtg,lvt,mch,vsf,vvd,jmq,pld,nkh,mnt,fzl,tcr,nbh,psk,hvz,tfp,qgz,jbg,mbr,pnx,fmg,gms,flm,gcd,xvn,nnl,pbh,zzx,ffd,clb,mrv,xxs,zzl,xzk,xnn,nrv,lcq,vfc,pmd,lvv,hcx,mfj,xfl,skx,gtt,vkz,hng,vdh,lmr,ddf,hhc,kpd,mjd,hrl,jbm,dzt,mrm,xcx,xhl,pgj,qfm,czj,mzs,kgd,fxq,kvg,xtp,brd,fxx,xdt,kpc,sgf,rml,ppn,jxg,smd,ssm,hmp,fmj,hdx,kkd,mcg,dlx,hxr,crx,pfc,mff,bgm,jgc,cfc,tsf,xcj,hvq,jfk,jts,xzv,bjp,crk,mhb,mxs,fxk,pcz,vhg,zgr,qxn,pnd,ggk,hcs,qjp,mgx,fdx,mqp,fjt,bzt,gsg,jrz,qxb,csj,grx,gzn,jnk,gfx,jbk,bcd,vgp,jsm,pfx,xtx,xhg,lvb,zjq,psh,bkc,dlb,mnr,kvr,rdz,rlf,xpf,dcr,rzc,kjs,brn,srl,fxz,lqx,vth,bpv,ppl,mzx,dmg,qlr,qnj,thv,sgp,qnm,zqm,qdt,fbk,kkq,mfk,hnk,smr,lxn,kpf,ctn,blt,xzb,cpp,ksd,tjj,qrm,fgv,nhl,vfd,hfc,fgq,gxk,xkz,ddl,jfq,kmh,gxg,dnm,jqs,jvh,ddm,dxh,mkk,cfr,nrn,fbf,pgh,chn,tss,znk,hks,lvk,sfd,pgb,dcp,lrd,zsm,kqd,rdx,kkn,pbc,qzv,qsm,jbh,rqr,pvq,bnx,nhf,qjt,kxg,rzg,lzr,mtq,fsh,lsx,mkh,kqx,qvf,bbt,jls,qmz,vxk,bjt,smj,scv,xxk,msx,nqr,xjt,nbn,xnx,krb,xcl,ghc,zhv,lsl,svx,jrq,fgp,zll,tqm,tlz,bjm,xvd,bzs,vzn,bpg,bcg,sbv,kml,lnp,ndv,kjb,lch,qff,rkc,jxj,pns,slt,gts,njq,mdp,khh,kbl,qdg,dhq,mrt,pxl,qbj,jtc,dpt,mmb,qbs,btk,szf,scf,dxf,ncq,pvh,gfb,fhp,hmd,hvm,tkr,clh,hpj,zxt,vdj,qxd,tpn,jkx,lss,jmg,rcc,hjg,mdm,mft,fxv,vqb,pkq,nkp,bkd,vgh,lkh,dbx,lvd,cnp,jfv,kdk,sft,scj,lcc,sfs,pbj,rvt,qxl,rsv,slv,nhx,rpj,jzn,qgr,rrr,hkf,qcl,fnp,qrc,lkj,hhb,tcb,nkm,rkv,xqn,mdv,hrb,fgs,brb,gch,pkb,qnh,xdj,prh,cnh,tvh,hsm,nks,drp,jdp,kdh,vhb,qkl,tsl,fxm,xfj,bmz,sss,vpl,mjz,cxg,skd,krq,vkl,dtg,dps,cbn,gdt,ntl,xfs,ngg,psg,fch,srd,stp,nct,kfg,sxk,lvq,rlc,drx,rkp,fss,plb,bff,mtx,jmx,klf,fbl,rkm,hgl,jfd,nzn,jlr,jpv,gqm,mbf,dcl,djj,jqv,tmh,pgk,ngz,tvf,xvh,bkm,czp,jnv,gtq,hsj,bzr,qqq,ztc,hdk,kfq,jpl,xvb,zmm,jpc,gfs,ntb,jmh,sqz,fmx,ccf,jxn,lcf,tcd,kvz,lfs,mpq,dmm,zqg,pnm,rrf,cgk,btp,tkm,ttz,zvc,rqp,hmj,mfh,qbm,a,b,c,d,e,f,g,h";
 
-            lhs = (plus.Contains("," + lhs + ",") ? "+" : "-") + lhs;
-            rhs = (plus.Contains("," + rhs + ",") ? "+" : "-") + rhs;
+            //lhs = (plus.Contains("," + lhs + ",") ? "+" : "-") + lhs;
+            //rhs = (plus.Contains("," + rhs + ",") ? "+" : "-") + rhs;
 
             if (!graph.v.TryGetValue(lhs, out var node))
             {
@@ -50,25 +63,23 @@ public class Day25
         foreach (var line in File.ReadLines(path))
         {
             var s = line.Split(new[] { ' ', ':' }, StringSplitOptions.RemoveEmptyEntries);
-            string lhs = s[0];
+            Node lhs = new(s[0]);
             foreach (var rhs in s.Skip(1))
             {
-                Add(lhs, rhs);
-                Add(rhs, lhs);
+                var n = new Node(rhs);
+                Add(lhs, n);
+                Add(n, lhs);
             }
         }
         return graph;
     }
-    static void Merge(Graph graph, string a, string b)
+    static void Merge(Graph graph, Node a, Node b)
     {
-        Trace.Assert(a.CompareTo(b) < 0);
-        if (a == b)
-            throw new NotImplementedException();
+        Trace.Assert(a.i.CompareTo(b.i) < 0);
         graph.v.Remove(a, out var na);
         graph.v.Remove(b, out var nb);
-        string name = a;
-        //name += "," + b;
-        Dictionary<string, int> connections =
+        Node name = a;
+        Dictionary<Node, int> connections =
             na.connections.Concat(nb.connections)
             .GroupBy(x => x.Key)
             .Select(x => (x.Key, x.Sum(y => y.Value)))
@@ -92,12 +103,17 @@ public class Day25
         int target_flow = 3;
         while (true)
         {
-            if (graph.v.FirstOrDefault(x => x.Value.connections.Any(y => x.Key.CompareTo(y.Key) < 0)) is not (string src, (int size, var connections)))
+            var q =
+                graph.v
+                .Select(x => (src: x.Key, size: x.Value.size, connections: x.Value.connections.Where(y => x.Key.i.CompareTo(y.Key.i) < 0)))
+                .Where(x => x.connections.Any())
+                .Select(x => (x.src, x.size, dst: x.connections.First().Key, capacity: x.connections.First().Value));
+            if (!q.Any())
                 break;
-            var (dst, nwires) = connections.First(y => src.CompareTo(y.Key) < 0);
+            (Node src, int size, Node dst, int capacity) = q.First();
 
-            Dictionary<(string, string), int> flowing = new();
-            int find(string curr, int flow, HashSet<string> visited)
+            Dictionary<(Node, Node), int> flowing = new();
+            int find(Node curr, int flow, HashSet<Node> visited)
             {
                 if (curr == dst)
                 {
@@ -146,9 +162,8 @@ public class Day25
                 return 0;
 
             }
-            flowing.Add((src, dst), nwires);
-            //flowing.Add((dst, src), nwires);
-            int flow = nwires;
+            flowing.Add((src, dst), capacity);
+            int flow = capacity;
             while (true)
             {
                 int found2 = find(src, int.MaxValue, [src]);
@@ -160,17 +175,13 @@ public class Day25
             Trace.Assert(target_flow <= flow);
             if (flow == target_flow)
             {
-                if (src[0] == dst[0])
-                    "".ToString();
                 Trace.Assert(graph.v[src].connections.Remove(dst));
                 Trace.Assert(graph.v[dst].connections.Remove(src));
-                target_flow -= nwires;
-                Console.WriteLine(("split", src, dst, nwires));
+                target_flow -= capacity;
+                Console.WriteLine(("split", src, dst, capacity));
             }
             else
             {
-                if (src[0] != dst[0])
-                    "".ToString();
                 Trace.Assert(graph.v[src].connections.Remove(dst));
                 Trace.Assert(graph.v[dst].connections.Remove(src));
                 Console.WriteLine(("merge", src, dst));

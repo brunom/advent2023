@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
 using System.Xml.Linq;
 using Xunit;
@@ -16,6 +17,8 @@ public enum Type
 {
     FlipFlop,
     Conjunction,
+    Broadcast,
+    Button,
 }
 public class Module
 {
@@ -43,40 +46,58 @@ public struct Message
 }
 public class Configuration
 {
-    Module[] modules;
-    Module broadcaster;
+    Module Button { get; }
     public Configuration(string filename)
     {
-        var lines =
-            File.ReadLines(filename)
-            .Select(x => x.Split(new[] { ",", "->", " " }, StringSplitOptions.RemoveEmptyEntries))
-            .ToList();
-        Dictionary<string, Module> byName = new();
-        modules = new Module[lines.Count];
-        for (int i = 0; i < lines.Count; i++)
-        {
-            string type_name = lines[i][0];
-            string name;
-            if (type_name == "broadcaster")
-            {
-                name = type_name;
-            }
-            else
-            {
-                name = type_name[1..];
-            }
-            var module = new Module { Name = name, Type = type_name[0] == '%' ? Type.FlipFlop : Type.Conjunction };
-            byName.Add(name, module);
-            modules[i] = module;
-        }
-        broadcaster = byName["broadcaster"];
+        var lines = File.ReadLines(filename);
 
-        for (int iSrcModule = 0; iSrcModule < lines.Count; iSrcModule++)
+        var byName = new Dictionary<string, Module>();
+        foreach (var line in lines)
         {
-            Module srcModule = modules[iSrcModule];
-            foreach (var dstName in lines[iSrcModule].AsSpan()[1..])
+            var names = line.Split(new[] { ", ", " -> " }, StringSplitOptions.None);
+            string srcName = names[0];
+            Type type;
+            if (srcName[0] == '%')
             {
-                Module dstModule = byName[dstName];
+                type = Type.FlipFlop;
+                srcName = srcName[1..];
+            }
+            else if (srcName[0] == '&')
+            {
+                type = Type.Conjunction;
+                srcName = srcName[1..];
+            }
+            else if (srcName == "broadcaster")
+            {
+                type = Type.Broadcast;
+            }
+            else throw new NotImplementedException();
+
+            if (!byName.TryGetValue(srcName, out Module srcModule))
+            {
+                srcModule = new Module { Name = srcName };
+                byName.Add(srcName, srcModule);
+            }
+            srcModule.Type = type;
+
+            if (type == Type.Broadcast)
+            {
+                Button = new Module { Name = "button", Type = Type.Button, };
+                var cable = new Cable
+                {
+                    Input = Button,
+                    Output = srcModule
+                };
+                Button.Outputs.Add(cable);
+                srcModule.Inputs.Add(cable);
+            }
+            foreach (var dstName in names.AsSpan()[1..])
+            {
+                if (!byName.TryGetValue(dstName, out Module dstModule))
+                {
+                    dstModule = new Module { Name = dstName };
+                    byName.Add(dstName, dstModule);
+                }
                 var cable = new Cable
                 {
                     Input = srcModule,
@@ -85,17 +106,6 @@ public class Configuration
                 srcModule.Outputs.Add(cable);
                 dstModule.Inputs.Add(cable);
             }
-        }
-    }
-    IEnumerable<Message> PushButton()
-    {
-        foreach (var cable in broadcaster.Outputs)
-        {
-            yield return new Message
-            {
-                Pulse = Pulse.low,
-                Cable = cable,
-            };
         }
     }
     public IEnumerable<Message> Receive(Message message)
@@ -130,19 +140,32 @@ public class Configuration
                 };
             }
         }
+        else if (module.Type == Type.Broadcast)
+        {
+            foreach (var cable in module.Outputs)
+            {
+                yield return new Message
+                {
+                    Pulse = message.Pulse,
+                    Cable = cable,
+                };
+            }
+        }
         else throw new NotImplementedException();
     }
-    public IEnumerable<Message> Trace()
+    public IEnumerable<Message> Press(int times = 1)
     {
         Queue<Message> q = new();
-        foreach (var m in PushButton())
-            q.Enqueue(m);
-        while (q.Count > 0)
+        for (int i = 0; i < times; i++)
         {
-            var oldMessage = q.Dequeue();
-            yield return oldMessage;
-            foreach (var newMessage in Receive(oldMessage))
-                q.Enqueue(newMessage);
+            q.Enqueue(new Message { Pulse = Pulse.low, Cable = Button.Outputs.Single(), });
+            while (q.Count > 0)
+            {
+                var oldMessage = q.Dequeue();
+                yield return oldMessage;
+                foreach (var newMessage in Receive(oldMessage))
+                    q.Enqueue(newMessage);
+            }
         }
     }
 }
@@ -153,8 +176,9 @@ public class Day20
     public static void Test_trace_example1()
     {
         var c = new Configuration("example1.txt");
-        var t = c.Trace();
+        var t = c.Press();
         Assert.Equal("""
+            button -low-> broadcaster
             broadcaster -low-> a
             broadcaster -low-> b
             broadcaster -low-> c
@@ -170,11 +194,20 @@ public class Day20
             t.Select(x => x.ToString()));
     }
     [Fact]
+    public static void Test_count_example1()
+    {
+        var c = new Configuration("example1.txt");
+        var t = c.Press(1000).ToList();
+        Assert.Equal(8000, t.Select(x => x.Pulse).Where(x => x == Pulse.low).LongCount());
+        Assert.Equal(4000, t.Select(x => x.Pulse).Where(x => x == Pulse.high).LongCount());
+    }
+    [Fact]
     public static void Test_trace_example2()
     {
         var c = new Configuration("example2.txt");
-        var t = c.Trace();
+        var t = c.Press(4);
         Assert.Equal("""
+            button -low-> broadcaster
             broadcaster -low-> a
             a -high-> inv
             a -high-> con
@@ -182,7 +215,44 @@ public class Day20
             con -high-> output
             b -high-> con
             con -low-> output
+            button -low-> broadcaster
+            broadcaster -low-> a
+            a -low-> inv
+            a -low-> con
+            inv -high-> b
+            con -high-> output
+            button -low-> broadcaster
+            broadcaster -low-> a
+            a -high-> inv
+            a -high-> con
+            inv -low-> b
+            con -low-> output
+            b -low-> con
+            con -high-> output
+            button -low-> broadcaster
+            broadcaster -low-> a
+            a -low-> inv
+            a -low-> con
+            inv -high-> b
+            con -high-> output
             """.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None),
             t.Select(x => x.ToString()));
+    }
+    [Fact]
+    public static void Test_count_example2()
+    {
+        var c = new Configuration("example2.txt");
+        var t = c.Press(1000).ToList();
+        Assert.Equal(4250, t.Select(x => x.Pulse).Where(x => x == Pulse.low).LongCount());
+        Assert.Equal(2750, t.Select(x => x.Pulse).Where(x => x == Pulse.high).LongCount());
+    }
+    [Fact]
+    public static void Test_count_input()
+    {
+        var c = new Configuration("input.txt");
+        var t = c.Press(1000).ToList();
+        Assert.Equal(739960225,
+            t.Select(x => x.Pulse).Where(x => x == Pulse.low).LongCount() *
+            t.Select(x => x.Pulse).Where(x => x == Pulse.high).LongCount());
     }
 }

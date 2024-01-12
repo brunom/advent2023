@@ -3,168 +3,188 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Xml.Linq;
 using Xunit;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
-public enum Pulse : byte
+
+Day20.Test_rx_input();
+
+public enum PulseValue : byte
 {
-    low, // Low = default, since Conjunctions "initially default to remembering a low pulse for each input"
+    low, // Low = default, since Conjunctions "initially default to remembering a low pulse for each input" and FlipFlops "are initially off"
     high,
 }
-public enum Type
+
+public enum ModuleType
 {
+    Broadcast, // Broadcast == default, do nothing when no destinations
     FlipFlop,
     Conjunction,
-    Broadcast,
     Button,
 }
 public class Module
 {
-    public Pulse LastPulse;
-    public Type Type;
-    public string Name; // does not include starting % or &
+    public int FlipFlopIndex = -1;
+    public ModuleType Type;
+    required public string Name { get; init; } // does not include starting % or &
     public List<Cable> Inputs = new();
-    public List<Cable> Outputs = new();
+    public List<Cable> Destinations = new();
 }
 
 public class Cable
 {
-    public Pulse LastPulse;
-    public Module Input;
-    public Module Output;
+    public PulseValue LastValue;
+    required public Module Input { get; init; }
+    required public Module Destination { get; init; }
 }
-public struct Message
+public struct Pulse
 {
-    public Pulse Pulse;
+    public PulseValue Value;
     public Cable Cable;
     public override string ToString()
     {
-        return $"{Cable.Input.Name} -{Pulse}-> {Cable.Output.Name}";
+        return $"{Cable.Input.Name} -{Value}-> {Cable.Destination.Name}";
     }
 }
 public class Configuration
 {
-    Module Button { get; }
+    public Dictionary<string, Module> Modules = new();
+    public UInt64 flipFlops;
+    public Queue<Pulse> InFlight = new();
+
     public Configuration(string filename)
     {
-        var lines = File.ReadLines(filename);
-
-        var byName = new Dictionary<string, Module>();
-        foreach (var line in lines)
+        int nFlipFlops = 0;
+        foreach (var line in File.ReadLines(filename))
         {
             var names = line.Split(new[] { ", ", " -> " }, StringSplitOptions.None);
             string srcName = names[0];
-            Type type;
+            ModuleType type;
+            int flipFlopIndex = -1;
             if (srcName[0] == '%')
             {
-                type = Type.FlipFlop;
+                flipFlopIndex = nFlipFlops++;
+                type = ModuleType.FlipFlop;
                 srcName = srcName[1..];
             }
             else if (srcName[0] == '&')
             {
-                type = Type.Conjunction;
+                type = ModuleType.Conjunction;
                 srcName = srcName[1..];
             }
             else if (srcName == "broadcaster")
             {
-                type = Type.Broadcast;
+                type = ModuleType.Broadcast;
             }
             else throw new NotImplementedException();
 
-            if (!byName.TryGetValue(srcName, out Module srcModule))
+            if (!Modules.TryGetValue(srcName, out Module? srcModule))
             {
-                srcModule = new Module { Name = srcName };
-                byName.Add(srcName, srcModule);
+                srcModule = new Module { Name = srcName, };
+                Modules.Add(srcName, srcModule);
             }
             srcModule.Type = type;
+            srcModule.FlipFlopIndex = flipFlopIndex;
 
-            if (type == Type.Broadcast)
+            if (type == ModuleType.Broadcast)
             {
-                Button = new Module { Name = "button", Type = Type.Button, };
+                var button = new Module { Name = "button", Type = ModuleType.Button, };
                 var cable = new Cable
                 {
-                    Input = Button,
-                    Output = srcModule
+                    Input = button,
+                    Destination = srcModule
                 };
-                Button.Outputs.Add(cable);
+                button.Destinations.Add(cable);
                 srcModule.Inputs.Add(cable);
+                Modules.Add("button", button);
             }
             foreach (var dstName in names.AsSpan()[1..])
             {
-                if (!byName.TryGetValue(dstName, out Module dstModule))
+                if (!Modules.TryGetValue(dstName, out Module? dstModule))
                 {
-                    dstModule = new Module { Name = dstName };
-                    byName.Add(dstName, dstModule);
+                    dstModule = new Module { Name = dstName, };
+                    Modules.Add(dstName, dstModule);
                 }
                 var cable = new Cable
                 {
                     Input = srcModule,
-                    Output = dstModule
+                    Destination = dstModule
                 };
-                srcModule.Outputs.Add(cable);
+                srcModule.Destinations.Add(cable);
                 dstModule.Inputs.Add(cable);
             }
         }
     }
-    public IEnumerable<Message> Receive(Message message)
+    public void Propagate(Pulse pulse)
     {
-        Module module = message.Cable.Output;
-        if (module.Type == Type.FlipFlop)
+        Module module = pulse.Cable.Destination;
+        if (module.Type == ModuleType.FlipFlop)
         {
-            if (message.Pulse == Pulse.low)
+            if (pulse.Value == PulseValue.low)
             {
-                Pulse newPulse = 1 - module.LastPulse;
-                module.LastPulse = newPulse;
-                foreach (var cable in module.Outputs)
+                //(module.State, var newPulse)
+                //    = module.State == FlipFlopState.off
+                //    ? (FlipFlopState.on, PulseValue.high)
+                //    : (FlipFlopState.off, PulseValue.low);
+                Debug.Assert(0 <= module.FlipFlopIndex);
+                var newValue = 1 - (PulseValue)((flipFlops >> module.FlipFlopIndex) & 1);
+                flipFlops ^= (UInt64)1 << module.FlipFlopIndex;
+                foreach (var cable in module.Destinations)
                 {
-                    yield return new Message
+                    InFlight.Enqueue(new Pulse
                     {
-                        Pulse = newPulse,
+                        Value = newValue,
                         Cable = cable,
-                    };
+                    });
                 }
             }
         }
-        else if (module.Type == Type.Conjunction)
+        else if (module.Type == ModuleType.Conjunction)
         {
-            message.Cable.LastPulse = message.Pulse;
-            Pulse newPulse = module.Inputs.All(input1 => input1.LastPulse == Pulse.high) ? Pulse.low : Pulse.high;
-            foreach (var cable in module.Outputs)
+            pulse.Cable.LastValue = pulse.Value;
+
+            PulseValue newValue = PulseValue.low;
+            foreach (var cable in module.Inputs)
             {
-                yield return new Message
+                if (cable.LastValue != PulseValue.high)
+                    newValue = PulseValue.high;
+            }
+            foreach (var cable in module.Destinations)
+            {
+                InFlight.Enqueue(new Pulse
                 {
-                    Pulse = newPulse,
+                    Value = newValue,
                     Cable = cable,
-                };
+                });
             }
         }
-        else if (module.Type == Type.Broadcast)
+        else if (module.Type == ModuleType.Broadcast)
         {
-            foreach (var cable in module.Outputs)
+            foreach (var cable in module.Destinations)
             {
-                yield return new Message
+                InFlight.Enqueue(new Pulse
                 {
-                    Pulse = message.Pulse,
+                    Value = pulse.Value,
                     Cable = cable,
-                };
+                });
             }
         }
         else throw new NotImplementedException();
     }
-    public IEnumerable<Message> Press(int times = 1)
+    public IEnumerable<Pulse> PressButton(int times = 1)
     {
-        Queue<Message> q = new();
+        var button = Modules["button"];
         for (int i = 0; i < times; i++)
         {
-            q.Enqueue(new Message { Pulse = Pulse.low, Cable = Button.Outputs.Single(), });
-            while (q.Count > 0)
+            InFlight.Enqueue(new Pulse { Value = PulseValue.low, Cable = button.Destinations.Single(), });
+            while (InFlight.Count > 0)
             {
-                var oldMessage = q.Dequeue();
-                yield return oldMessage;
-                foreach (var newMessage in Receive(oldMessage))
-                    q.Enqueue(newMessage);
+                var pulse = InFlight.Dequeue();
+                yield return pulse;
+                Propagate(pulse);
             }
         }
     }
@@ -176,7 +196,7 @@ public class Day20
     public static void Test_trace_example1()
     {
         var c = new Configuration("example1.txt");
-        var t = c.Press();
+        var t = c.PressButton();
         Assert.Equal("""
             button -low-> broadcaster
             broadcaster -low-> a
@@ -197,15 +217,15 @@ public class Day20
     public static void Test_count_example1()
     {
         var c = new Configuration("example1.txt");
-        var t = c.Press(1000).ToList();
-        Assert.Equal(8000, t.Select(x => x.Pulse).Where(x => x == Pulse.low).LongCount());
-        Assert.Equal(4000, t.Select(x => x.Pulse).Where(x => x == Pulse.high).LongCount());
+        var t = c.PressButton(1000).ToList();
+        Assert.Equal(8000, t.Where(x => x.Value == PulseValue.low).LongCount());
+        Assert.Equal(4000, t.Where(x => x.Value == PulseValue.high).LongCount());
     }
     [Fact]
     public static void Test_trace_example2()
     {
         var c = new Configuration("example2.txt");
-        var t = c.Press(4);
+        var t = c.PressButton(4);
         Assert.Equal("""
             button -low-> broadcaster
             broadcaster -low-> a
@@ -242,17 +262,71 @@ public class Day20
     public static void Test_count_example2()
     {
         var c = new Configuration("example2.txt");
-        var t = c.Press(1000).ToList();
-        Assert.Equal(4250, t.Select(x => x.Pulse).Where(x => x == Pulse.low).LongCount());
-        Assert.Equal(2750, t.Select(x => x.Pulse).Where(x => x == Pulse.high).LongCount());
+        var t = c.PressButton(1000).ToList();
+        Assert.Equal(4250, t.Where(x => x.Value == PulseValue.low).LongCount());
+        Assert.Equal(2750, t.Where(x => x.Value == PulseValue.high).LongCount());
     }
     [Fact]
     public static void Test_count_input()
     {
         var c = new Configuration("input.txt");
-        var t = c.Press(1000).ToList();
-        Assert.Equal(739960225,
-            t.Select(x => x.Pulse).Where(x => x == Pulse.low).LongCount() *
-            t.Select(x => x.Pulse).Where(x => x == Pulse.high).LongCount());
+        long low = 0;
+        long high = 0;
+        foreach (var x in c.PressButton(1000))
+        {
+            if (x.Value == PulseValue.low)
+                low++;
+            else
+                high++;
+        }
+        Assert.Equal(739960225, low * high);
+    }
+    [Fact]
+    public static void Test_rx_input()
+    {
+        var c = new Configuration("input.txt");
+        const int npartitions = 4;
+        string[][] partition_names =
+        [
+            ["kg", "pt", "vv", "nc", "gb", "ls", "lf", "hr", "fq", "qn", "bh", "vq"],
+            ["dz", "dc", "fk", "sl", "rp", "jb", "kp", "pz", "zg", "bb", "hg", "dl"],
+            ["ff", "vl", "vx", "cv", "jp", "kt", "hm", "tz", "mf", "sx", "rj", "xt"],
+            ["bq", "mg", "dp", "mh", "rz", "tj", "nd", "jx", "zz", "pf", "xk", "sf"],
+        ];
+        Module[] partition_sinks = new[] { "kf", "kr", "zs", "qk" }.Select(x => c.Modules[x]).ToArray();
+        UInt64[] partition_masks =
+            partition_names
+            .Select(ns => ns.Select(n => 1UL << c.Modules[n].FlipFlopIndex).Aggregate((a, b) => a | b))
+            .ToArray();
+        Dictionary<UInt64, long>[] partitions_dicts
+            = [new(), new(), new(), new(),];
+        List<UInt64>[] partitions_lists
+            = [new(), new(), new(), new(),];
+        for (int ipartition = 0; ipartition < npartitions; ipartition++)
+        {
+            c.flipFlops = 0;
+            for (long presses = 0; ; )
+            {
+                Debug.Assert(c.InFlight.Count == 0);
+                if (!partitions_dicts[ipartition].TryAdd(c.flipFlops & partition_masks[ipartition], presses))
+                {
+                    Console.WriteLine(new { ipartition, maxiter = presses, ff = c.flipFlops & partition_masks[ipartition] });
+                    break;
+                }
+                partitions_lists[ipartition].Add(c.flipFlops & partition_masks[ipartition]);
+
+                presses += 1;
+
+                foreach (var pulse in c.PressButton())
+                {
+                    if (pulse.Cable.Input == partition_sinks[ipartition] && pulse.Value == PulseValue.high)
+                    {
+                        Console.WriteLine(new { ipartition, presses, });
+                    }
+                }
+            }
+        }
+
+        "".ToString();
     }
 }
